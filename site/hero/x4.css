@@ -1,0 +1,88 @@
+/* The kit's two inks and nothing else: the device is drawn the way the snail is, a line around a solid form. */
+
+.x4 {
+  --x4-ink: #222222;
+  --x4-paper: #e2e0d8;
+  --x4-mono: "DejaVu Sans Mono", ui-monospace, Menlo, monospace;
+}
+
+/* The page is the ground */
+.x4 .ss-stage {
+  background: var(--x4-ink);
+}
+
+/* Keystrokes, as the kit's icon tiles: reversed, square */
+.x4 .ss-key {
+  border-radius: 0;
+  background: var(--x4-paper);
+  box-shadow: none;
+  color: var(--x4-ink);
+  font-family: var(--x4-mono);
+}
+
+/* The outline is the body showing around its fill. Both carry stepped corners from X4Hero.tsx. */
+.x4 .x4-body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: var(--x4-paper);
+  transform-origin: 0 0;
+}
+
+.x4 .x4-fill {
+  position: absolute;
+  background: var(--x4-ink);
+}
+
+/* Compact: the stage's crop, which the body runs off on both sides and pans inside */
+.x4 .x4-crop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* The one move on this stage that is not the panel's: the crop finding the text */
+.x4 .x4-crop .x4-body {
+  transition: transform 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* The line keeps the panel's ink status bar off the ink body */
+.x4 .x4-panel {
+  position: absolute;
+  overflow: hidden;
+  background: var(--x4-paper);
+  box-shadow: 0 0 0 2px var(--x4-paper);
+}
+
+.x4 .x4-panel img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.x4 .x4-flash {
+  position: absolute;
+  inset: 0;
+}
+
+.x4 .x4-flash[data-flash='black'] {
+  background: var(--x4-ink);
+}
+
+.x4 .x4-flash[data-flash='white'] {
+  background: var(--x4-paper);
+}
+
+.x4 .x4-button {
+  position: absolute;
+  width: 8px;
+  height: 184px;
+  background: var(--x4-paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .x4 .x4-crop .x4-body {
+    transition: none;
+  }
+}

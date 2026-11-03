@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>x4ssh: SSH on the Xteink X4</title>
+  <meta name="description" content="x4ssh turns the Xteink X4 e-ink reader into an SSH terminal. Copy one file to the SD card and pair a Bluetooth keyboard.">
+  <link rel="canonical" href="https://x4ssh.cobanov.dev/">
+  <meta name="theme-color" content="#e2e0d8">
+  <meta property="og:site_name" content="x4ssh">
+  <meta property="og:title" content="x4ssh: SSH on the Xteink X4">
+  <meta property="og:description" content="x4ssh turns the Xteink X4 e-ink reader into an SSH terminal.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://x4ssh.cobanov.dev/">
+  <meta property="og:image" content="https://x4ssh.cobanov.dev/img/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The x4ssh logo, the words SSH on a pocket e-ink reader, and a pixel snail holding a dish">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="x4ssh: SSH on the Xteink X4">
+  <meta name="twitter:description" content="x4ssh turns the Xteink X4 e-ink reader into an SSH terminal.">
+  <meta name="twitter:image" content="https://x4ssh.cobanov.dev/img/og.png">
+  <meta name="twitter:creator" content="@mertcobanov">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="preload" href="/fonts/dejavu-sans-mono-bold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/hero/hero.css">
+  <script type="module" src="/hero/hero.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="band">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="x4ssh home"><img src="/img/horizontal.svg" width="117" height="18" alt=""></a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="#install">Install</a></li>
+        <li><a href="https://github.com/cobanov/x4ssh">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+<div class="fade" aria-hidden="true"></div>
+
+<main id="main">
+  <section class="hero wrap" aria-labelledby="title">
+    <div class="hero-top">
+      <div>
+        <h1 id="title">SSH on a pocket <span class="line">e-ink reader<span class="cursor" aria-hidden="true"></span></span></h1>
+        <p class="lede">x4ssh turns the Xteink X4 into a terminal. Pair a Bluetooth keyboard and log in to your machines.</p>
+        <div class="actions">
+          <a class="btn" href="/dl/firmware.bin" download>Download</a>
+          <span>firmware.bin, 1.8 MB</span>
+        </div>
+        <p class="req">Needs CrossPoint on the X4 and a Bluetooth LE keyboard.</p>
+      </div>
+      <div class="plate">
+        <div class="tile"><div class="snail" role="img" aria-label="The snail sweeping a dish, looking for Wi-Fi"></div></div>
+      </div>
+    </div>
+    <figure class="hero-demo" id="hero-demo" role="img" aria-label="The X4 held sideways. It wakes from its sleep screen, the snail sweeps a dish until Wi-Fi connects, an SSH session opens, two commands run, and it goes back to sleep.">
+      <noscript><img src="/img/hero.png" width="1000" height="681" alt="The X4 held sideways, showing a terminal session"></noscript>
+    </figure>
+  </section>
+
+  <section class="section wrap" aria-labelledby="snail">
+    <h2 id="snail">Meet the snail</h2>
+    <p class="note">SSH is a secure shell, and <span class="nb">e-ink</span> takes its time.</p>
+    <div class="decks">
+      <figure>
+        <img src="/film/003.png" width="800" height="480" loading="lazy" alt="The boot screen: the snail holds a dish over the words XTEINK SSH">
+        <figcaption>Looking for Wi-Fi at boot</figcaption>
+      </figure>
+      <figure>
+        <img src="/film/000.png" width="800" height="480" loading="lazy" alt="The sleep screen: the snail asleep over the words press power to wake">
+        <figcaption>Asleep, with the power off</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section wrap" aria-labelledby="core">
+    <h2 id="core" class="visually-hidden">What x4ssh does</h2>
+    <ul class="trio">
+      <li>
+        <h3>x4&gt; pair</h3>
+        <p>Pair a Bluetooth LE keyboard from the prompt. It reconnects on boot.</p>
+      </li>
+      <li>
+        <h3>x4&gt; key</h3>
+        <p>An ed25519 key made on the device at first boot. It never leaves, and passwords work too.</p>
+      </li>
+      <li>
+        <h3>x4&gt; ssh</h3>
+        <p>Host keys are saved on first connect, and a changed key is refused.</p>
+      </li>
+    </ul>
+  </section>
+
+  <section class="section wrap" aria-labelledby="install">
+    <h2 id="install">Install from the SD card</h2>
+    <ol class="steps">
+      <li><span>Copy <a href="/dl/firmware.bin" download>firmware.bin</a> to your SD card</span></li>
+      <li><span>Put the card in the X4</span></li>
+      <li><span>Open Settings → System → SD Card Firmware Update</span></li>
+    </ol>
+    <p class="back">To go back, type <code>crosspoint</code> at the prompt.</p>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="foot">
+      <div class="about">
+        <img src="/img/stacked-reversed.svg" alt="x4ssh" width="86" height="58">
+        <p>An SSH terminal for the Xteink X4, and part of the cyberdeck.</p>
+      </div>
+      <div>
+        <h2>Project</h2>
+        <ul>
+          <li><a href="https://github.com/cobanov/x4ssh">Source</a></li>
+          <li><a href="https://github.com/cobanov/x4ssh/releases">Releases</a></li>
+          <li><a href="https://cyberdeck.cobanov.dev/">Cyberdeck</a></li>
+          <li><a href="/llms.txt">llms.txt</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Built on</h2>
+        <ul>
+          <li><a href="https://github.com/penk/X4Term">X4Term</a></li>
+          <li><a href="https://github.com/ewpa/LibSSH-ESP32">LibSSH-ESP32</a></li>
+          <li><a class="nb" href="https://github.com/Free-Ink/freeink-sdk">freeink-sdk</a></li>
+          <li><a href="https://github.com/cobanov/x4ssh/blob/main/THIRD_PARTY.md">Licenses</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>Contact</h2>
+        <ul>
+          <li><a href="https://x.com/mertcobanov">X</a></li>
+          <li><a href="https://cobanov.dev">cobanov.dev</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="fade up" aria-hidden="true"></div>
+  <div class="band legal">
+    <div class="wrap">
+      <span>Made by <a href="https://cobanov.dev">Mert Cobanov</a></span>
+      <span>Xteink and X4 belong to their owners. x4ssh is not affiliated with Xteink</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

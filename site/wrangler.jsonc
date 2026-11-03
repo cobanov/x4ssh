@@ -1,0 +1,11 @@
+{
+  // The project website: static files only, served from Cloudflare Workers at x4ssh.cobanov.dev.
+  "name": "x4ssh-site",
+  "compatibility_date": "2026-10-01",
+  "account_id": "c7127d8fc0f65ab18ec12bdd78dd3859",
+  // Before every deploy: /hero/ (the live panel) is built and /dl/ gets the firmware `tools/pio run` last built.
+  // The frames in /film/ come from film.sh.
+  "build": { "command": "mkdir -p public/dl && cp ../.pio/build/default/firmware.bin public/dl/ && npm --prefix hero install --silent && npm --prefix hero run build" },
+  "assets": { "directory": "./public", "html_handling": "auto-trailing-slash", "not_found_handling": "404-page" },
+  "routes": [{ "pattern": "x4ssh.cobanov.dev", "custom_domain": true }]
+}

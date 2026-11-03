@@ -1,0 +1,146 @@
+[
+{
+"kind": "full",
+"hold": 1200,
+"key": null,
+"mark": "asleep"
+},
+{
+"kind": "full",
+"hold": 700,
+"key": "power",
+"mark": "boot"
+},
+{
+"kind": "fast",
+"hold": 1000,
+"key": null,
+"mark": "scan"
+},
+{
+"kind": "fast",
+"hold": 1000,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 1000,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 1000,
+"key": null,
+"mark": "online"
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": "typing"
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 900,
+"key": "enter",
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 700,
+"key": null,
+"mark": "session"
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 800,
+"key": "enter",
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 430,
+"key": null,
+"mark": null
+},
+{
+"kind": "fast",
+"hold": 2400,
+"key": "enter",
+"mark": "output"
+},
+{
+"kind": "full",
+"hold": 300,
+"key": "power",
+"mark": "sleep"
+}
+]
