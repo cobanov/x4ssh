@@ -1,0 +1,6 @@
+#!/bin/sh
+# PlatformIO Core 6.1.19, pinned. The tuned core (custom_sdkconfig) is built by pioarduino 55.03.311
+# with SCons 4.8; Core 6.2's SCons 4.11 fails it ("No module named SCons.Tool.FortranCommon").
+# The builder starts a nested `pio`, so this one has to come first on PATH.
+P=$(uvx -q --from 'platformio==6.1.19' python -c 'import sys; print(sys.prefix)') || exit 1
+PATH="$P/bin:$PATH" exec pio "$@"

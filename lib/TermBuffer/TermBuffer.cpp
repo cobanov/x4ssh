@@ -147,6 +147,7 @@ void TermBuffer::setScrollRegion(int top, int bottom) {
   _scrollBottom = bottom;
   _curRow = 0;
   _curCol = 0;
+  _wrapPending = false;
 }
 
 void TermBuffer::scrollUp(int n) {
@@ -202,6 +203,7 @@ void TermBuffer::insertChars(int n) {
 }
 
 void TermBuffer::deleteChars(int n) {
+  if (n > TERM_COLS - _curCol) n = TERM_COLS - _curCol;
   markRowDirty(_curRow);
   for (int c = _curCol; c < TERM_COLS - n; c++) {
     _cells[_curRow][c] = _cells[_curRow][c + n];
@@ -219,6 +221,7 @@ void TermBuffer::saveCursor() {
 void TermBuffer::restoreCursor() {
   _curRow = _savedRow;
   _curCol = _savedCol;
+  _wrapPending = false;
   clampCursor();
 }
 

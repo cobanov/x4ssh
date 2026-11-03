@@ -12,6 +12,12 @@ class VtParser {
   // Cursor visibility (controlled by DECTCEM ?25h/l)
   bool cursorVisible() const { return _cursorVisible; }
 
+  // DECCKM (?1h/l): arrows send ESC O x instead of ESC [ x
+  bool appCursor() const { return _appCursor; }
+
+  // Where answers to the host's queries (DSR, DA) go: the SSH channel, not the USB serial
+  void onReply(void (*reply)(const char*)) { _reply = reply; }
+
  private:
   TermBuffer& _buf;
 
@@ -44,6 +50,9 @@ class VtParser {
   void resetParams();
 
   bool _cursorVisible = true;
+  bool _appCursor = false;
+  void (*_reply)(const char*) = nullptr;
+  void reply(const char* s) { if (_reply) _reply(s); }
 
   // UTF-8 decoder state
   uint32_t _utf8Cp = 0;

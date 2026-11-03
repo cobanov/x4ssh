@@ -25,6 +25,7 @@ class HalGPIO {
 
   bool wasPressed(uint8_t btn) const;
   bool isPressed(uint8_t btn) const;
+  bool wasReleased(uint8_t btn) const;
   unsigned long getHeldTime() const;
 
   void startDeepSleep();

@@ -1,5 +1,4 @@
 #include "VtParser.h"
-#include <Arduino.h>
 #include <cstdio>
 
 void VtParser::resetParams() {
@@ -22,8 +21,9 @@ void VtParser::feed(uint8_t byte) {
     case State::CsiEntry:  handleCsiEntry(byte); break;
     case State::CsiParam:  handleCsiParam(byte); break;
     case State::OscString:
-      // Consume until ST (ESC \) or BEL
-      if (byte == 0x07 || byte == 0x1B) _state = State::Ground;
+      // Consume until BEL or ST (ESC \): Escape then eats the backslash
+      if (byte == 0x07) _state = State::Ground;
+      else if (byte == 0x1B) _state = State::Escape;
       break;
     case State::EscSwallow:
       // Swallow one byte (charset designation parameter) and return to ground
@@ -89,6 +89,10 @@ void VtParser::handleEscape(uint8_t byte) {
       resetParams();
       break;
     case ']':
+    case 'P':  // DCS
+    case 'X':  // SOS
+    case '^':  // PM
+    case '_':  // APC
       _state = State::OscString;
       break;
     case 'D':  // IND - index (move down, scroll if at bottom)
@@ -151,16 +155,19 @@ void VtParser::handleCsiEntry(uint8_t byte) {
 void VtParser::handleCsiParam(uint8_t byte) {
   if (byte >= '0' && byte <= '9') {
     if (_paramCount == 0) _paramCount = 1;
-    _params[_paramCount - 1] = _params[_paramCount - 1] * 10 + (byte - '0');
+    // Stops well past the screen and well short of overflowing: the host picks these digits
+    int& p = _params[_paramCount - 1];
+    if (p < 10000) p = p * 10 + (byte - '0');
     return;
   }
   if (byte == ';') {
+    if (_paramCount == 0) _paramCount = 1;  // the first parameter was left empty
     if (_paramCount < MAX_PARAMS) _paramCount++;
     return;
   }
-  // Intermediate bytes (0x20-0x2F: space ! " # $ % & ' ( ) * + , - . /)
+  // Intermediate bytes (0x20-0x2F: space ! " # $ % & ' ( ) * + , - . /) and colon sub-parameters
   // Collect but mark as having intermediates so we can ignore unsupported sequences
-  if (byte >= 0x20 && byte <= 0x2F) {
+  if ((byte >= 0x20 && byte <= 0x2F) || (byte >= 0x3A && byte <= 0x3F)) {
     _hasIntermediate = true;
     return;
   }
@@ -188,6 +195,7 @@ void VtParser::dispatchCsi(uint8_t cmd) {
     switch (cmd) {
       case 'h':  // DECSET
         switch (mode) {
+          case 1: _appCursor = true; break;         // DECCKM
           case 25: _cursorVisible = true; break;    // DECTCEM show cursor
           case 47:    // alt screen (simple)
           case 1047:  // alt screen
@@ -199,6 +207,7 @@ void VtParser::dispatchCsi(uint8_t cmd) {
         break;
       case 'l':  // DECRST
         switch (mode) {
+          case 1: _appCursor = false; break;        // DECCKM
           case 25: _cursorVisible = false; break;   // DECTCEM hide cursor
           case 47:
           case 1047:
@@ -249,19 +258,20 @@ void VtParser::dispatchCsi(uint8_t cmd) {
       break;
     case 'n':  // DSR - device status report
       if (param(0, 0) == 6) {
-        // Cursor position report - send response over serial
-        // ESC [ row ; col R (1-based)
+        // Cursor position report: ESC [ row ; col R (1-based)
         char resp[20];
         snprintf(resp, sizeof(resp), "\033[%d;%dR",
                  _buf.cursorRow() + 1, _buf.cursorCol() + 1);
-        Serial.print(resp);
+        reply(resp);
+      } else if (param(0, 0) == 5) {
+        reply("\033[0n");  // status: OK
       }
       break;
     case 's': _buf.saveCursor(); break;     // ANSI save cursor
     case 'u': _buf.restoreCursor(); break;  // ANSI restore cursor
     case 'X': _buf.eraseChars(n); break;    // ECH - erase characters
     case 'c':  // DA - device attributes
-      Serial.print("\033[?1;0c");  // VT100 with no options
+      reply("\033[?1;0c");  // VT100 with no options
       break;
   }
 }

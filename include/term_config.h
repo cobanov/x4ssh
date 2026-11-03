@@ -8,15 +8,16 @@
 #define TERM_FONT_W 10
 #define TERM_FONT_H 20
 
-// Horizontal margin to avoid bezel clipping
-#define TERM_OFFSET_X 10
+// Margins so text stays clear of the bezel: 20 px left and right, 12 px on top, 8 px between the
+// terminal and the status bar, which takes the bottom 20 px.
+#define TERM_OFFSET_X 20
+#define TERM_OFFSET_Y 12
+#define STATUS_Y (DISPLAY_H - TERM_FONT_H)
 
-// Terminal grid (with margin: 10 + 78*10 = 790, leaving 10px right margin)
-#define TERM_COLS ((DISPLAY_W - TERM_OFFSET_X * 2) / TERM_FONT_W)  // 78
-#define TERM_ROWS (DISPLAY_H / TERM_FONT_H)  // 24
+#define TERM_COLS ((DISPLAY_W - TERM_OFFSET_X * 2) / TERM_FONT_W)  // 76
+#define TERM_ROWS ((STATUS_Y - 8 - TERM_OFFSET_Y) / TERM_FONT_H)   // 22
 
 // Display refresh thresholds
-#define DIRTY_ROWS_PARTIAL_MAX  5       // Use partial update for <= this many dirty rows
 #define FULL_REFRESH_INTERVAL   20      // Full refresh every N fast refreshes
 #define MIN_REFRESH_INTERVAL_MS 300     // Minimum ms between display refreshes
 

@@ -13,6 +13,7 @@ void HalGPIO::update() { inputMgr.update(); }
 
 bool HalGPIO::wasPressed(uint8_t btn) const { return inputMgr.wasPressed(btn); }
 bool HalGPIO::isPressed(uint8_t btn) const { return inputMgr.isPressed(btn); }
+bool HalGPIO::wasReleased(uint8_t btn) const { return inputMgr.wasReleased(btn); }
 unsigned long HalGPIO::getHeldTime() const { return inputMgr.getHeldTime(); }
 
 void HalGPIO::startDeepSleep() {
