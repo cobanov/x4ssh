@@ -60,5 +60,21 @@ int main() {
   feed("\033c\033[1;76Hx\033[2;20r");
   feed("y");
   assert(buf.cellAt(0, 0).codepoint == 'y');
+  // Boxes in DEC Special Graphics, then back to text
+  feed("\033c\033(0lqk\033(Bq");
+  assert(buf.cellAt(0, 0).codepoint == 0x250C && buf.cellAt(0, 1).codepoint == 0x2500);
+  assert(buf.cellAt(0, 2).codepoint == 0x2510 && buf.cellAt(0, 3).codepoint == 'q');
+  feed("\033(0\033cq");
+  assert(buf.cellAt(0, 0).codepoint == 'q');
+
+  // Past 16 bits a cell would hold the wrong character: U+10041 is not 'A'
+  feed("\033c\xF0\x90\x81\x81");
+  assert(buf.cellAt(0, 0).codepoint == '?');
+
+  // What cmdSsh sends after a session: the region goes, the cursor stays
+  feed("\033c\033[5;10r\033[10;1H\0337\033[r\0338");
+  assert(buf.cursorRow() == 9);
+  feed("\n\n\n\n\n\n\n\n\n\n\n\n");
+  assert(buf.cursorRow() == TERM_ROWS - 1);
   puts("vt ok");
 }

@@ -1,6 +1,12 @@
 #include "VtParser.h"
 #include <cstdio>
 
+// DEC Special Graphics, 0x60-0x7E: what ncurses draws boxes with on an xterm
+static const uint16_t kLineDrawing[] = {
+    0x25C6, 0x2592, 0x2409, 0x240C, 0x240D, 0x240A, 0x00B0, 0x00B1, 0x2424, 0x240B, 0x2518, 0x2510, 0x250C, 0x2514, 0x253C, 0x23BA,
+    0x23BB, 0x2500, 0x23BC, 0x23BD, 0x251C, 0x2524, 0x2534, 0x252C, 0x2502, 0x2264, 0x2265, 0x03C0, 0x2260, 0x00A3, 0x00B7,
+};
+
 void VtParser::resetParams() {
   for (int i = 0; i < MAX_PARAMS; i++) _params[i] = 0;
   _paramCount = 0;
@@ -25,6 +31,10 @@ void VtParser::feed(uint8_t byte) {
       if (byte == 0x07) _state = State::Ground;
       else if (byte == 0x1B) _state = State::Escape;
       break;
+    case State::Charset:
+      _lineDrawing = byte == '0';
+      _state = State::Ground;
+      break;
     case State::EscSwallow:
       // Swallow one byte (charset designation parameter) and return to ground
       _state = State::Ground;
@@ -39,7 +49,7 @@ void VtParser::handleGround(uint8_t byte) {
       _utf8Cp = (_utf8Cp << 6) | (byte & 0x3F);
       _utf8Remaining--;
       if (_utf8Remaining == 0) {
-        _buf.putChar((uint16_t)_utf8Cp);
+        _buf.putChar(_utf8Cp > 0xFFFF ? '?' : (uint16_t)_utf8Cp);  // a cell holds 16 bits
       }
       return;
     }
@@ -64,7 +74,7 @@ void VtParser::handleGround(uint8_t byte) {
     case 0x0D: _buf.carriageReturn(); break;  // CR
     default:
       if (byte >= 0x20 && byte < 0x7F) {
-        _buf.putChar(byte);
+        _buf.putChar(_lineDrawing && byte >= 0x60 ? kLineDrawing[byte - 0x60] : byte);
       } else if (byte >= 0xC0 && byte < 0xE0) {
         // UTF-8 2-byte sequence start
         _utf8Cp = byte & 0x1F;
@@ -116,13 +126,16 @@ void VtParser::handleEscape(uint8_t byte) {
       _buf.setCursor(0, 0);
       _buf.resetAttrs();
       _buf.setScrollRegion(0, TERM_ROWS - 1);
+      _lineDrawing = false;
       _state = State::Ground;
       break;
     case '=':  // DECKPAM - keypad application mode (ignore)
     case '>':  // DECKPNM - keypad numeric mode (ignore)
       _state = State::Ground;
       break;
-    case '(':  // G0 charset designation - consume next byte
+    case '(':  // G0 charset designation
+      _state = State::Charset;
+      break;
     case ')':  // G1 charset designation - consume next byte
     case '#':  // DEC line drawing - consume next byte
     case '*':  // G2 charset designation - consume next byte

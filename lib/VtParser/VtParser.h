@@ -27,7 +27,8 @@ class VtParser {
     CsiEntry,
     CsiParam,
     OscString,
-    EscSwallow,  // consume one byte after ESC( ESC) ESC#
+    EscSwallow,  // consume one byte after ESC) ESC#
+    Charset,     // the byte after ESC(: which set G0 holds
   };
 
   State _state = State::Ground;
@@ -51,6 +52,7 @@ class VtParser {
 
   bool _cursorVisible = true;
   bool _appCursor = false;
+  bool _lineDrawing = false;  // G0 is DEC Special Graphics
   void (*_reply)(const char*) = nullptr;
   void reply(const char* s) { if (_reply) _reply(s); }
 

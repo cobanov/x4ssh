@@ -18,7 +18,7 @@ Needs CrossPoint on the X4 and a Bluetooth LE keyboard.
 2. Put the card in the X4
 3. Open Settings → System → SD Card Firmware Update
 
-`crosspoint` at the prompt goes back. The SD route has not been tried on a device yet; a USB flash always works (below).
+`crosspoint` at the prompt goes back. The SD update itself has not been tried on a device yet; a USB flash works (below).
 The X4 Pro and Classic are untested.
 
 ## Build and flash
@@ -69,7 +69,7 @@ x4> sleep                turn off; the power button wakes it
   Wi-Fi and Bluetooth are shut down before deep sleep, as ESP-IDF requires.
 - BLE only: the ESP32-C3 has no Classic Bluetooth, so keyboards like Apple's Magic Keyboard can't connect.
   Tested: M7 (pairs, reconnects on boot).
-- Draws ASCII, Latin-1, box drawing (light, heavy, double) and block elements; no Turkish ş ğ ı İ yet.
+- Draws ASCII, Latin-1, box drawing (light, heavy, double), DEC line drawing and block elements; no Turkish ş ğ ı İ yet.
 - Arrow keys follow DECCKM; cursor-position and device-attribute queries are answered over SSH.
 
 ## Site

@@ -65,6 +65,15 @@ static void say(const char* fmt, ...) {
   text(buf);
 }
 
+// BLE names come from whatever is nearby; a control byte in one would reach the terminal.
+static const char* printable(const char* s) {
+  static char out[64];
+  size_t i = 0;
+  for (; s[i] && i < sizeof out - 1; i++) out[i] = (uint8_t)s[i] < 0x20 || s[i] == 0x7f ? '?' : s[i];
+  out[i] = 0;
+  return out;
+}
+
 // Rebuilt only when the minute, the wifi link or the USB cable changes (one refresh a minute);
 // battery and signal are sampled then, so their jitter costs no refreshes. The cable is not shown,
 // but plugging it in moves the battery reading, so it still triggers a rebuild.
@@ -167,7 +176,10 @@ static size_t pollInput(uint8_t* out, size_t cap) {
     if (button && !kb.isConnected() && !kb.isConnecting()) kb.armBondedReconnect(freeink::PickPolicy::First, nullptr);
     while (n + 5 <= cap && kb.popKey(e)) n += keyBytes(e, out + n, parser.appCursor());
   }
-  if (gpio.isPressed(HalGPIO::BTN_CONFIRM) && gpio.isPressed(HalGPIO::BTN_BACK)) renderer.renderFull();
+  if ((gpio.wasPressed(HalGPIO::BTN_CONFIRM) && gpio.isPressed(HalGPIO::BTN_BACK)) ||
+      (gpio.wasPressed(HalGPIO::BTN_BACK) && gpio.isPressed(HalGPIO::BTN_CONFIRM))) {
+    renderer.renderFull();
+  }
   // Power: press = redraw the whole screen, hold = sleep. Boot ignores the press that woke it.
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > 1500) sleepNow();
   if (gpio.wasReleased(HalGPIO::BTN_POWER) && millis() > 5000) renderer.renderFull();
@@ -176,9 +188,12 @@ static size_t pollInput(uint8_t* out, size_t cap) {
 }
 
 // Reads one line, echoing it unless `secret`. Arrow keys and other escape sequences are dropped.
-// Ctrl-C gives an empty line.
+// Ctrl-C gives an empty line and sets askCancelled, which is how a caller tells it from a bare Enter.
+static bool askCancelled = false;
+
 static String ask(const char* prompt, bool secret = false) {
   static bool afterCR = false;
+  askCancelled = false;
   int esc = 0;  // 1: after ESC, 2: inside a CSI/SS3 sequence
   String line;
   say("%s", prompt);
@@ -201,6 +216,7 @@ static String ask(const char* prompt, bool secret = false) {
         return line;
       } else if (c == 0x03) {
         say("^C\n");
+        askCancelled = true;
         return String();
       } else if (c == 0x7f || c == 0x08) {
         if (line.length()) {
@@ -241,6 +257,7 @@ static void cmdWifi() {
   String ssid = ask("ssid: ");
   if (!ssid.length()) return;
   String pass = ask("password: ", true);
+  if (askCancelled) return;
   prefs.putString("ssid", ssid);
   prefs.putString("pass", pass);
   WiFi.disconnect();
@@ -270,7 +287,7 @@ static void cmdPair() {
   for (int i = 0; i < kb.deviceCount(); i++) {
     const auto& d = kb.device(i);
     if (d.hid && first < 0) first = i;
-    say("%2d) %s%s\n", i + 1, d.name, d.hid ? "  [keyboard]" : "");
+    say("%2d) %s%s\n", i + 1, printable(d.name), d.hid ? "  [keyboard]" : "");
   }
   if (!kb.deviceCount()) {
     say("nothing found\n");
@@ -281,7 +298,7 @@ static void cmdPair() {
   if (i < 0 || i >= kb.deviceCount()) return;
   char addr[sizeof kb.device(i).addr];
   strcpy(addr, kb.device(i).addr);
-  say("connecting to %s\n", kb.device(i).name);
+  say("connecting to %s\n", printable(kb.device(i).name));
   pumpDisplay(true);
   if (!kb.connect(addr)) {
     say("could not start the connection\n");
@@ -299,7 +316,7 @@ static void cmdPair() {
     pumpDisplay();
   }
   kb.releaseScanResults();
-  say("keyboard connected: %s\n", kb.connectedName());
+  say("keyboard connected: %s\n", printable(kb.connectedName()));
 }
 
 // ---- keys
@@ -472,7 +489,8 @@ static void cmdSsh(String target) {
     Serial.printf("[x4ssh heap %u free, %u largest, stack %u left]\r\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
                   (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     shell(s);
-    say("\033[0m\033[?1049l\033[?25h\nconnection to %s closed\n", host.c_str());
+    // A dropped session leaves whatever modes the remote program had on; the scroll region's reset homes the cursor
+    say("\033[0m\033(B\033[?1049l\0337\033[r\0338\033[?1l\033[?25h\nconnection to %s closed\n", host.c_str());
   }
   ssh_disconnect(s);
   ssh_free(s);
@@ -481,7 +499,7 @@ static void cmdSsh(String target) {
 // ---- local prompt
 
 static void cmdStat() {
-  say("keyboard: %s\n", kb.isConnected() ? kb.connectedName() : kb.pairedCount() ? "paired, not connected" : "none");
+  say("keyboard: %s\n", kb.isConnected() ? printable(kb.connectedName()) : kb.pairedCount() ? "paired, not connected" : "none");
   say("wifi: %s %s\n", prefs.getString("ssid", "-").c_str(),
       WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString().c_str() : "(not connected)");
   say("heap: %u free, %u largest   battery: %d%%\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
@@ -511,16 +529,17 @@ static void cmdCrosspoint() {
 }
 
 static void cmdHelp() {
-  say("ssh user@host[:port]   connect (no argument: the last one)\n"
-      "wifi                   set the wifi network\n"
-      "pair                   pair a BLE keyboard (Enter on an empty line, before the first)\n"
-      "key                    show this device's public key\n"
-      "forget <host>          drop a saved host key\n"
-      "stat                   wifi, memory, battery\n"
-      "tz [zone]              show or set the clock's zone, e.g. tz UTC-3\n"
-      "crosspoint             go back to the firmware x4ssh was installed from\n"
-      "sleep                  turn off (the power button wakes it)\n"
-      "clear                  clear the screen\n");
+  // text, not say: this is longer than say's buffer
+  text("ssh user@host[:port]   connect (no argument: the last one)\n"
+       "wifi                   set the wifi network\n"
+       "pair                   pair a BLE keyboard\n"
+       "key                    show this device's public key\n"
+       "forget <host>          drop a saved host key\n"
+       "stat                   wifi, memory, battery\n"
+       "tz [zone]              show or set the clock's zone, e.g. tz UTC-3\n"
+       "crosspoint             go back to the firmware x4ssh was installed from\n"
+       "sleep                  turn off (the power button wakes it)\n"
+       "clear                  clear the screen\n");
 }
 
 void setup() {
