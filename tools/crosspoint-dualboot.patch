@@ -1,0 +1,56 @@
+diff --git a/platformio.ini b/platformio.ini
+index e6b5d0f..9b7e4d6 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -4,7 +4,7 @@ build_cache_dir = .cache
+ extra_configs = platformio.local.ini
+ 
+ [crosspoint]
+-version = 1.6.5
++version = 1.6.5-x4ssh
+ 
+ [base]
+ platform = https://github.com/pioarduino/platform-espressif32/releases/download/55.03.311/platform-espressif32.zip
+diff --git a/src/main.cpp b/src/main.cpp
+index c9094d4..37cb8f0 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1,4 +1,8 @@
+ #include <Arduino.h>
++#include <esp_ota_ops.h>
++#include <nvs.h>
++
++#include <cstring>
+ #include <BoardConfig.h>
+ #include <Epub.h>
+ #include <FontCacheManager.h>
+@@ -30,6 +34,7 @@
+ #include "OpdsServerStore.h"
+ #include "RecentBooksStore.h"
+ #include "SdCardFontSystem.h"
++#include "network/OtaBootSwitch.h"
+ #include "activities/Activity.h"
+ #include "activities/ActivityManager.h"
+ #include "activities/settings/SdFirmwareUpdateActivity.h"
+@@ -393,6 +398,21 @@ void setup() {
+   const bool recoveryFirmwareMode = wakeupReason == HalGPIO::WakeupReason::PowerButton && !BoardConfig::isPaperMono() &&
+                                     mappedInputManager.isPressed(recoveryButton);
+ 
++  // x4ssh dual boot: Down + Power at wake boots x4ssh, and the note in NVS tells it to send a plain wake back
++  // here. getWakeupReason is PowerButton only for a real wake, so held buttons cannot bounce.
++  if (wakeupReason == HalGPIO::WakeupReason::PowerButton && gpio.isPressed(HalGPIO::BTN_DOWN)) {
++    const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr);
++    esp_app_desc_t desc;
++    nvs_handle_t nvs;
++    if (other && esp_ota_get_partition_description(other, &desc) == ESP_OK && strstr(desc.project_name, "x4ssh") &&
++        nvs_open("x4ssh", NVS_READWRITE, &nvs) == ESP_OK) {
++      nvs_set_u8(nvs, "home", 1);
++      nvs_commit(nvs);
++      nvs_close(nvs);
++      if (ota_boot::switchTo(other)) esp_restart();
++    }
++  }
++
+   halTiltSensor.begin();
+   halClock.begin();
+ 

@@ -8,5 +8,6 @@
 - Screen: 76 columns by 22 rows on the 800x480 panel
 - Local prompt commands: wifi, pair, key, ssh, forget, stat, tz, crosspoint, sleep, clear
 - Go back: type crosspoint at the prompt
+- Keep both: install crosspoint-x4ssh.bin from a release first; then Power wakes CrossPoint, Down + Power wakes x4ssh
 - Source and releases: https://github.com/cobanov/x4ssh
 - Built on: X4Term (https://github.com/penk/X4Term), LibSSH-ESP32 (https://github.com/ewpa/LibSSH-ESP32), freeink-sdk (https://github.com/Free-Ink/freeink-sdk)

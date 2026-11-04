@@ -4,6 +4,9 @@
 
 class VtParser {
  public:
+  // Undoes whatever modes a dropped session left on. The scroll region's reset homes the cursor, hence the save around it.
+  static constexpr const char* kSessionEnd = "\033[0m\033(B\033[?1049l\0337\033[r\0338\033[?1l\033[?25h";
+
   VtParser(TermBuffer& buf) : _buf(buf) {}
 
   // Feed one byte from serial input

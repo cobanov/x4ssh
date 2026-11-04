@@ -85,6 +85,7 @@ void TermRenderer::renderRow(int row) {
 }
 
 void TermRenderer::renderDirty() {
+  if (_paged) return;
   if (_art && artCovered()) setArt(nullptr);
   uint32_t dirty = _buf.dirtyRows();
 
@@ -127,6 +128,7 @@ void TermRenderer::renderDirty() {
 }
 
 void TermRenderer::renderFull() {
+  _paged = false;
   _buf.markAllDirty();
   for (int row = 0; row < TERM_ROWS; row++) {
     renderRow(row);
@@ -139,6 +141,25 @@ void TermRenderer::renderFull() {
   _lastCursorRow = _buf.cursorRow();
   _lastCursorCol = _buf.cursorCol();
   _buf.clearDirty();
+}
+
+void TermRenderer::pageBegin() {
+  memset(_display.getFrameBuffer(), 0xFF, STATUS_Y * (DISPLAY_W / 8));
+  _paged = true;
+}
+
+void TermRenderer::pageLine(int row, const char* text, bool band) {
+  for (int col = 0; col < TERM_COLS; col++) {
+    uint8_t scratch[TermFont::BYTES_PER_GLYPH];
+    const uint8_t c = col && *text ? (uint8_t)*text++ : ' ';  // one cell in, as the status bar's text sits
+    blitGlyph(TERM_OFFSET_X + col * TERM_FONT_W, TERM_OFFSET_Y + row * TERM_FONT_H, glyphFor(c, scratch), band ? 0 : 255, band);
+  }
+}
+
+void TermRenderer::pageEnd() {
+  renderStatus();
+  _display.displayBuffer(EInkDisplay::FAST_REFRESH);
+  _fastRefreshCount++;
 }
 
 void TermRenderer::renderStatus() {

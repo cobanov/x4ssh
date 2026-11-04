@@ -212,8 +212,7 @@ void VtParser::dispatchCsi(uint8_t cmd) {
           case 25: _cursorVisible = true; break;    // DECTCEM show cursor
           case 47:    // alt screen (simple)
           case 1047:  // alt screen
-          case 1049:  // alt screen + save cursor
-            if (mode == 1049) _buf.saveCursor();
+          case 1049:  // switchScreen keeps the cursor itself: DECSC's slot belongs to the program
             _buf.switchScreen(true);
             break;
         }
@@ -226,7 +225,6 @@ void VtParser::dispatchCsi(uint8_t cmd) {
           case 1047:
           case 1049:
             _buf.switchScreen(false);
-            if (mode == 1049) _buf.restoreCursor();
             break;
         }
         break;

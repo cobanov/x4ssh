@@ -7,6 +7,7 @@
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <esp_app_desc.h>
 #include <esp_ota_ops.h>
 #include <libssh/libssh.h>
 #include <time.h>
@@ -128,6 +129,12 @@ static void splash(const char* line) {
 
 // ---- input
 
+// CrossPoint's SD update writes the other OTA slot, so the firmware it came from is still there.
+static bool selectOtherFirmware() {
+  const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr);
+  return other && esp_ota_set_boot_partition(other) == ESP_OK;
+}
+
 // E-ink keeps its last image with the power off, so the sleep screen stays up while it sleeps:
 // the sleeping snail, how to wake it, and when it went to sleep with the battery then.
 static void sleepNow() {
@@ -150,6 +157,49 @@ static void sleepNow() {
   gpio.startDeepSleep();
 }
 
+static const char* keyboardState() {
+  return kb.isConnected() ? printable(kb.connectedName()) : kb.pairedCount() ? "paired, not connected" : "none";
+}
+
+// What every button and key does and how things stand, for when there is no keyboard to type help on.
+static void showInfo() {
+  static const char* const kKeys[] = {
+      "back, held     this page            ctrl + key    sent as ctrl",
+      "back           esc                  alt + key     esc, then the key",
+      "confirm        enter                cmd + key     nothing",
+      "arrows         arrows               ctrl-c        leaves a prompt",
+      "confirm+back   redraw the screen",
+      "power, held    sleep",
+  };
+  static const char* const kPrompt[] = {
+      "ssh user@host  connect              key           this device's public key",
+      "ssh            the last host        forget <host> drop a saved host key",
+      "wifi           set the network      tz <zone>     the clock, e.g. tz UTC-3",
+      "pair           pair a keyboard      crosspoint    the firmware under x4ssh",
+      "stat           memory, battery      sleep         turn off",
+  };
+  char line[TERM_COLS + 1];
+  int row = 0;
+  renderer.pageBegin();
+  snprintf(line, sizeof line, "x4ssh %-49sany key closes this", esp_app_get_description()->version);
+  renderer.pageLine(row, line, true);
+  row += 2;
+  renderer.pageLine(row++, "buttons                             keyboard", true);
+  for (const char* s : kKeys) renderer.pageLine(row++, s);
+  row++;
+  renderer.pageLine(row++, "at the prompt", true);
+  for (const char* s : kPrompt) renderer.pageLine(row++, s);
+  row++;
+  renderer.pageLine(row++, "now", true);
+  snprintf(line, sizeof line, "wifi           %s %s", prefs.getString("ssid", "-").c_str(),
+           WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString().c_str() : "(not connected)");
+  renderer.pageLine(row++, line);
+  snprintf(line, sizeof line, "keyboard       %s", kb.pairedCount() ? keyboardState() : "none: confirm on an empty prompt pairs one");
+  renderer.pageLine(row++, line);
+  if (prefs.getBool("home")) renderer.pageLine(row, "next wake      crosspoint; down + power for x4ssh");
+  renderer.pageEnd();
+}
+
 // Fills `out` with key bytes from every input source; returns how many.
 static size_t pollInput(uint8_t* out, size_t cap) {
   using K = freeink::SpecialKey;
@@ -158,8 +208,9 @@ static size_t pollInput(uint8_t* out, size_t cap) {
     K key;
   } kButtons[] = {
       {HalGPIO::BTN_UP, K::Up},     {HalGPIO::BTN_DOWN, K::Down},       {HalGPIO::BTN_RIGHT, K::Right},
-      {HalGPIO::BTN_LEFT, K::Left}, {HalGPIO::BTN_CONFIRM, K::Enter}, {HalGPIO::BTN_BACK, K::Escape},
+      {HalGPIO::BTN_LEFT, K::Left}, {HalGPIO::BTN_CONFIRM, K::Enter},
   };
+  static BackButton back;
   size_t n = 0;
   bool button = false;
   freeink::KeyEvent e;
@@ -170,20 +221,32 @@ static size_t pollInput(uint8_t* out, size_t cap) {
     e.special = b.key;
     n += keyBytes(e, out + n, parser.appCursor());
   }
+  const auto backAction = back.update(gpio.isPressed(HalGPIO::BTN_BACK), gpio.wasReleased(HalGPIO::BTN_BACK), gpio.getHeldTime());
+  if (backAction == BackButton::Esc && n + 5 <= cap) {
+    button = true;
+    e.special = K::Escape;
+    n += keyBytes(e, out + n, parser.appCursor());
+  }
   if (kb.isRunning()) {
     kb.poll();
     // The keyboard slept past the reconnect window: a press on the X4 starts looking again.
     if (button && !kb.isConnected() && !kb.isConnecting()) kb.armBondedReconnect(freeink::PickPolicy::First, nullptr);
     while (n + 5 <= cap && kb.popKey(e)) n += keyBytes(e, out + n, parser.appCursor());
   }
-  if ((gpio.wasPressed(HalGPIO::BTN_CONFIRM) && gpio.isPressed(HalGPIO::BTN_BACK)) ||
-      (gpio.wasPressed(HalGPIO::BTN_BACK) && gpio.isPressed(HalGPIO::BTN_CONFIRM))) {
+  if (!renderer.paged() && ((gpio.wasPressed(HalGPIO::BTN_CONFIRM) && gpio.isPressed(HalGPIO::BTN_BACK)) ||
+                            (gpio.wasPressed(HalGPIO::BTN_BACK) && gpio.isPressed(HalGPIO::BTN_CONFIRM)))) {
+    back.spent = true;
     renderer.renderFull();
   }
-  // Power: press = redraw the whole screen, hold = sleep. Boot ignores the press that woke it.
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > 1500) sleepNow();
-  if (gpio.wasReleased(HalGPIO::BTN_POWER) && millis() > 5000) renderer.renderFull();
   while (n < cap && Serial.available()) out[n++] = Serial.read();
+  const bool info = backAction == BackButton::Info;
+  // A key that closes the page goes no further: nobody means to type at a host they could not see.
+  if (renderer.paged() && (n || info || gpio.wasReleased(HalGPIO::BTN_POWER))) {
+    renderer.renderFull();
+    return 0;
+  }
+  if (info) showInfo();
   return n;
 }
 
@@ -489,8 +552,7 @@ static void cmdSsh(String target) {
     Serial.printf("[x4ssh heap %u free, %u largest, stack %u left]\r\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
                   (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     shell(s);
-    // A dropped session leaves whatever modes the remote program had on; the scroll region's reset homes the cursor
-    say("\033[0m\033(B\033[?1049l\0337\033[r\0338\033[?1l\033[?25h\nconnection to %s closed\n", host.c_str());
+    say("%s\nconnection to %s closed\n", VtParser::kSessionEnd, host.c_str());
   }
   ssh_disconnect(s);
   ssh_free(s);
@@ -499,7 +561,7 @@ static void cmdSsh(String target) {
 // ---- local prompt
 
 static void cmdStat() {
-  say("keyboard: %s\n", kb.isConnected() ? printable(kb.connectedName()) : kb.pairedCount() ? "paired, not connected" : "none");
+  say("keyboard: %s\n", keyboardState());
   say("wifi: %s %s\n", prefs.getString("ssid", "-").c_str(),
       WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString().c_str() : "(not connected)");
   say("heap: %u free, %u largest   battery: %d%%\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
@@ -516,10 +578,8 @@ static void cmdTz(const String& tz) {
   say("tz: %s\n", prefs.getString("tz", kDefaultTz).c_str());
 }
 
-// CrossPoint's SD update writes the other OTA slot, so the firmware it came from is still there.
 static void cmdCrosspoint() {
-  const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr);
-  if (!other || esp_ota_set_boot_partition(other) != ESP_OK) {
+  if (!selectOtherFirmware()) {
     say("no other firmware to boot\n");
     return;
   }
@@ -547,6 +607,20 @@ void setup() {
   Serial.setTxTimeoutMs(0);      // the USB mirror must never stall on battery with no host reading
   Serial.begin(TERM_BAUD);
   gpio.begin();
+  prefs.begin("x4ssh");
+  // A patched CrossPoint left this note on its way here (tools/crosspoint-dualboot.patch): a plain wake is its own, Down +
+  // Power stays. It has to be decided here, as a wake from deep sleep skips otadata and boots the last app again. A stock
+  // CrossPoint can't come back, so without the note x4ssh keeps the wake.
+  if (esp_reset_reason() == ESP_RST_DEEPSLEEP && prefs.getBool("home")) {
+    for (int i = 0; i < 20; i++) {  // past the input debounce
+      gpio.update();
+      delay(1);
+    }
+    if (!gpio.isPressed(HalGPIO::BTN_DOWN) && selectOtherFirmware()) {
+      prefs.remove("home");
+      ESP.restart();
+    }
+  }
   display.begin();
   display.clearScreen(0xFF);
   display.displayBuffer(EInkDisplay::FULL_REFRESH, false);
@@ -560,7 +634,6 @@ void setup() {
   pumpDisplay(true);
   // Bluetooth first: NimBLE wants ~50 KB in large blocks, which only an unfragmented heap still has.
   if (startBle() && kb.pairedCount()) kb.armBondedReconnect(freeink::PickPolicy::First, nullptr);
-  prefs.begin("x4ssh");
   WiFi.mode(WIFI_STA);  // also turns the RF on, which the hardware RNG behind key generation needs
   wifiWanted = prefs.isKey("ssid");
   if (wifiWanted) WiFi.begin(prefs.getString("ssid").c_str(), prefs.getString("pass").c_str());

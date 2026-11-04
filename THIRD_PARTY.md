@@ -12,6 +12,7 @@ to rebuild it, or to relink it against a changed library, is here: see Build in 
 | [open-x4-sdk](https://github.com/open-x4-epaper/community-sdk), input and the display driver | `open-x4-sdk/`, `lib/EInkDisplay/` | MIT |
 | [Arduino core for ESP32](https://github.com/espressif/arduino-esp32) | fetched by PlatformIO | LGPL 2.1 |
 | [ESP-IDF](https://github.com/espressif/esp-idf) | fetched by PlatformIO | Apache 2.0 |
+| [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) 1.6.5, patched: `crosspoint-x4ssh.bin` on releases | `tools/crosspoint-dualboot.patch` | [MIT](tools/crosspoint-LICENSE) |
 | [DejaVu fonts](https://dejavu-fonts.github.io/) | `fonts/`, `design/fonts/`, `site/public/fonts/` | [DejaVu license](design/fonts/LICENSE_DEJAVU) |
 
 ## X4Term

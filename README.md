@@ -21,6 +21,24 @@ Needs CrossPoint on the X4 and a Bluetooth LE keyboard.
 `crosspoint` at the prompt goes back. The SD update itself has not been tried on a device yet; a USB flash works (below).
 The X4 Pro and Classic are untested.
 
+## Two firmwares
+
+`crosspoint-x4ssh.bin`, on every [release](https://github.com/cobanov/x4ssh/releases), is CrossPoint 1.6.5 with
+`tools/crosspoint-dualboot.patch` on it. With it, Power wakes CrossPoint and Down + Power wakes x4ssh, no keyboard needed.
+Without it `crosspoint` is one way: the way back is the SD update or USB.
+
+Install it first, the same way as `firmware.bin`, then install `firmware.bin` and type `crosspoint` once. Tried on a device
+over USB only (`esptool write-flash 0x650000 crosspoint-x4ssh.bin`, with x4ssh in the first slot). CrossPoint's own updates
+write the slot x4ssh sits in.
+
+```
+git clone --branch 1.6.5 --recurse-submodules https://github.com/crosspoint-reader/crosspoint-reader
+cd crosspoint-reader && git apply ../x4ssh/tools/crosspoint-dualboot.patch
+../x4ssh/tools/pio run -e gh_release
+```
+
+Both projects rebuild the same PlatformIO core, so never build them at once.
+
 ## Build and flash
 
 ```
@@ -61,7 +79,9 @@ x4> sleep                turn off; the power button wakes it
 - Host keys: trust on first use, saved in `/littlefs/known_hosts`; a changed key always refuses.
 - Everything drawn is mirrored to USB serial, and USB serial is also a keyboard: `pio device monitor --eol CR`
   drives the device from a Mac.
-- Buttons: arrows, Confirm = Enter, Back = Esc. Power: press = redraw the whole screen, hold = sleep.
+- Buttons: arrows, Confirm = Enter, Back = Esc, Confirm + Back = redraw. Back, held: a page of every button, key
+  and command with the wifi and keyboard state, for when there is no keyboard; any key closes it. Power, held: sleep.
+  With [both firmwares](#two-firmwares): Power wakes CrossPoint, Down + Power wakes x4ssh.
   Asleep, the e-ink keeps the sleeping snail, "press power to wake" and `sleeping since <time>` with the battery.
 - The snail: on boot it sweeps a dish while wifi connects, then puts it down. When text scrolls up to it, it moves
   to the middle of the status bar. Art, logos, tokens and rules are in `design/`; `design/mascot/build.py` rebuilds

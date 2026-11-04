@@ -36,5 +36,15 @@ int main() {
   assert(bytes(0, 0x04, K::Left, true) == "\033\033OD");
   assert(bytes(0, 0, K::PageUp, true) == "\033[5~");   // not a cursor key
   assert(bytes('a', 0, K::None, true) == "a");
+
+  BackButton back;
+  assert(back.update(true, false, 100) == BackButton::None);   // held, not long enough yet
+  assert(back.update(false, true, 100) == BackButton::Esc);    // a tap: Esc on release
+  assert(back.update(true, false, 900) == BackButton::Info);   // a hold: the page, once
+  assert(back.update(true, false, 950) == BackButton::None);
+  assert(back.update(false, true, 1000) == BackButton::None);  // and no Esc after it
+  back.spent = true;                                           // Confirm + Back redrew
+  assert(back.update(false, true, 100) == BackButton::None);
+  assert(back.update(false, true, 100) == BackButton::Esc);    // the next tap is a tap again
   puts("keys ok");
 }

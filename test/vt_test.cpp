@@ -71,10 +71,15 @@ int main() {
   feed("\033c\xF0\x90\x81\x81");
   assert(buf.cellAt(0, 0).codepoint == '?');
 
-  // What cmdSsh sends after a session: the region goes, the cursor stays
-  feed("\033c\033[5;10r\033[10;1H\0337\033[r\0338");
+  // A session ending on the main screen: the region goes, the cursor stays, whatever DECSC holds
+  feed("\033c\033[1;1H\0337\033[5;10r\033[10;1H");
+  feed(VtParser::kSessionEnd);
   assert(buf.cursorRow() == 9);
   feed("\n\n\n\n\n\n\n\n\n\n\n\n");
   assert(buf.cursorRow() == TERM_ROWS - 1);
+
+  // Leaving the alt screen lands where it was entered, even if the program saved a cursor in there
+  feed("\033c\033[15;3H\033[?1049h\033[2;2H\0337\033[?1049l");
+  assert(buf.cursorRow() == 14 && buf.cursorCol() == 2);
   puts("vt ok");
 }

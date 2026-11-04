@@ -39,6 +39,12 @@ class TermRenderer {
   }
   bool hasArt() const { return _art != nullptr; }
 
+  // A page of text over the terminal. The terminal keeps taking text underneath, undrawn, until renderFull.
+  void pageBegin();
+  void pageLine(int row, const char* text, bool band = false);  // band: paper on ink, like the status bar
+  void pageEnd();
+  bool paged() const { return _paged; }
+
  private:
   EInkDisplay& _display;
   TermBuffer& _buf;
@@ -49,6 +55,7 @@ class TermRenderer {
   uint16_t _status[TERM_COLS] = {};
   bool _statusPending = false;
   const uint8_t* _art = nullptr;
+  bool _paged = false;
 
   void renderStatus();
   void renderArt();

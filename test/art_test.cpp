@@ -101,6 +101,24 @@ int main(int argc, char** argv) {
   renderer.setArt(nullptr);
   status("wifi: homelab 72%", "99% | 23:58");
 
+  // The info page: text arriving under it stays undrawn, and renderFull brings the terminal back.
+  buf.eraseDisplay(2);
+  renderer.setArt(nullptr);
+  renderer.renderFull();
+  status("wifi: homelab 100%", "99% | 23:58");
+  renderer.pageBegin();
+  renderer.pageLine(0, "x4ssh", true);
+  renderer.pageLine(2, "buttons");
+  renderer.pageEnd();
+  assert(renderer.paged() && black(TERM_OFFSET_X + 700, TERM_OFFSET_Y + 2) && !black(TERM_OFFSET_X + 700, TERM_OFFSET_Y + 2 * TERM_FONT_H + 2));
+  const int shown = ink(0, 0, 800, 480), drawn = display.refreshes;
+  buf.setCursor(10, 0);
+  type("under the page");
+  renderer.renderDirty();
+  assert(ink(0, 0, 800, 480) == shown && display.refreshes == drawn);
+  renderer.renderFull();
+  assert(!renderer.paged() && !black(TERM_OFFSET_X + 700, TERM_OFFSET_Y + 2) && ink(TERM_OFFSET_X, TERM_OFFSET_Y + 10 * TERM_FONT_H, 200, TERM_OFFSET_Y + 11 * TERM_FONT_H) > 0);
+
   // Sleep: everything cleared, snail asleep.
   buf.eraseDisplay(2);
   at(MASCOT_LAST_ROW + 1, "press power to wake");
