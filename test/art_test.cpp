@@ -119,6 +119,43 @@ int main(int argc, char** argv) {
   renderer.renderFull();
   assert(!renderer.paged() && !black(TERM_OFFSET_X + 700, TERM_OFFSET_Y + 2) && ink(TERM_OFFSET_X, TERM_OFFSET_Y + 10 * TERM_FONT_H, 200, TERM_OFFSET_Y + 11 * TERM_FONT_H) > 0);
 
+  // The cursor moves with no text changing, and the panel follows; hidden, it costs no refresh.
+  buf.eraseDisplay(2);
+  buf.setCursor(3, 3);
+  renderer.renderFull();
+  assert(!renderer.cursorMoved());
+  const auto cell = [](int row, int col) {
+    return ink(TERM_OFFSET_X + col * TERM_FONT_W, TERM_OFFSET_Y + row * TERM_FONT_H, TERM_OFFSET_X + (col + 1) * TERM_FONT_W, TERM_OFFSET_Y + (row + 1) * TERM_FONT_H);
+  };
+  assert(cell(3, 3) == TERM_FONT_W * TERM_FONT_H && cell(3, 2) == 0);
+  buf.moveCursorBack(1);
+  assert(buf.dirtyRows() == 0 && renderer.cursorMoved());
+  renderer.renderDirty();
+  assert(!renderer.cursorMoved());
+  assert(cell(3, 2) == TERM_FONT_W * TERM_FONT_H && cell(3, 3) == 0);
+  renderer.setCursorVisible(false);
+  assert(renderer.cursorMoved());
+  renderer.renderDirty();
+  assert(cell(3, 2) == 0);
+  buf.moveCursorForward(5);
+  assert(!renderer.cursorMoved());
+  renderer.setCursorVisible(true);
+
+  // Bold strikes twice and underline runs the whole cell, on the row '_' sits on.
+  buf.setCursor(0, 0);
+  buf.putChar('H');
+  buf.setAttr(TermCell::ATTR_BOLD);
+  buf.putChar('H');
+  buf.clearAttr(TermCell::ATTR_BOLD);
+  buf.setAttr(TermCell::ATTR_UNDERLINE);
+  buf.putChar('H');
+  buf.resetAttrs();
+  buf.setCursor(5, 0);
+  renderer.renderDirty();
+  assert(cell(0, 1) > cell(0, 0));
+  assert(cell(0, 2) == cell(0, 0) + TERM_FONT_W);
+  assert(ink(TERM_OFFSET_X + 2 * TERM_FONT_W, TERM_OFFSET_Y + TERM_FONT_H - 1, TERM_OFFSET_X + 3 * TERM_FONT_W, TERM_OFFSET_Y + TERM_FONT_H) == TERM_FONT_W);
+
   // Sleep: everything cleared, snail asleep.
   buf.eraseDisplay(2);
   at(MASCOT_LAST_ROW + 1, "press power to wake");

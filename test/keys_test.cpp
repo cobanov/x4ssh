@@ -46,5 +46,12 @@ int main() {
   back.spent = true;                                           // Confirm + Back redrew
   assert(back.update(false, true, 100) == BackButton::None);
   assert(back.update(false, true, 100) == BackButton::Esc);    // the next tap is a tap again
+
+  ConfirmButton confirm;
+  assert(!confirm.update(false));                              // held: nothing yet
+  assert(confirm.update(true));                                // a tap: Enter on release
+  confirm.spent = true;                                        // Confirm + Back redrew
+  assert(!confirm.update(true));                               // no Enter reaches the host
+  assert(confirm.update(true));                                // the next tap is a tap again
   puts("keys ok");
 }

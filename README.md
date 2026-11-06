@@ -71,7 +71,7 @@ x4> stat                 keyboard, wifi, heap, battery
 x4> tz UTC-3             the clock's zone as a POSIX TZ string, kept in NVS (UTC until set)
 x4> crosspoint           boot the firmware x4ssh was installed from
 x4> clear                clear the screen
-x4> sleep                turn off; the power button wakes it
+x4> sleep                turn off; the power button wakes it (also after 10 idle minutes at a prompt, on battery)
 x4> help                 all of this
 ```
 
@@ -80,7 +80,7 @@ The buttons work without a keyboard:
 | Button | |
 |---|---|
 | Arrows | Arrow keys |
-| Confirm | Enter |
+| Confirm | Enter, on release |
 | Back | Esc |
 | Confirm + Back | Redraw the screen |
 | Back, held | A page of every button, key and command, with the wifi and keyboard state. Any key closes it |
@@ -100,16 +100,16 @@ Turkish ş ğ ı İ yet. Arrow keys follow DECCKM, and cursor-position and devic
 
 ## Known issues
 
-- The cursor moves on the panel only with the next text or clock change, so arrow keys at a shell prompt or in vim look
-  dead.
+- Text colors aren't drawn, as the panel has one ink. Background colors show as dither, and bold and underline are drawn.
+- Characters outside the font show as `?`. Wide ones, emoji included, still take their two columns.
+
+v0.3.0, the current release, also has these, fixed on `main` and waiting to be tried on a device before the next release:
+
+- The cursor moves on the panel only with the next text or clock change.
 - Confirm + Back also sends Enter, so a command typed on the line runs.
-- Current ncurses repeats a character with `ESC[<n>b`, which x4ssh doesn't handle: lines come out one character long.
-- Bold, underline and text colors aren't drawn.
-- Emoji and other wide characters push the columns after them one to the left.
-- It only sleeps when told to, so it can run down in a bag.
-- On a machine with no PlatformIO yet, the first `tools/pio run` stops with
-  `No module named 'SCons.Tool.FortranCommon'`. Run it again. If your newest Python is 3.15, use
-  `UV_PYTHON=3.14 tools/pio run`.
+- ncurses lines drawn with `ESC[<n>b` come out one character long.
+- Bold and underline aren't drawn.
+- It only sleeps when told to. `main` sleeps after 10 minutes idle at a prompt, on battery.
 
 ## Build and flash
 
@@ -137,8 +137,8 @@ tools/pio run   # firmware
 ## Site and design
 
 `site/` is x4ssh.cobanov.dev: `public/` the page, `hero/` the live panel (Stageshow kit), `film.sh` its frames through the
-real renderer, `tiles.py` the dither and the snail from the kit. `cd site && npx wrangler deploy` builds the hero, copies
-the last `firmware.bin` into `/dl/` and ships it. Rerun `film.sh` when anything drawn on the panel changes.
+real renderer, `tiles.py` the dither and the snail from the kit. `cd site && npx wrangler deploy` builds the hero and ships
+it. `/dl/firmware.bin` redirects to the latest release. Rerun `film.sh` when anything drawn on the panel changes.
 
 The snail, logos, tokens and rules are in [`design/`](design/README.md). `design/mascot/build.py` rebuilds them and
 `include/mascot.h`.

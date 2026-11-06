@@ -21,6 +21,12 @@ class TermRenderer {
   // Cursor visibility (set from VtParser's DECTCEM state)
   void setCursorVisible(bool v) { _cursorVisible = v; }
 
+  // The panel shows the cursor somewhere else, or shows it when it shouldn't. No text changed, so nothing else redraws it.
+  bool cursorMoved() const {
+    if (_cursorVisible != _drawnCursorVisible) return true;
+    return _cursorVisible && (_buf.cursorRow() != _lastCursorRow || _buf.cursorCol() != _lastCursorCol);
+  }
+
   // Bottom status bar (TERM_COLS codepoints), white on black under the terminal rows.
   // A changed bar is drawn with the next renderDirty, even when no terminal row changed.
   void setStatus(const uint16_t* cells) {
@@ -52,6 +58,7 @@ class TermRenderer {
   int _lastCursorRow = -1;
   int _lastCursorCol = -1;
   bool _cursorVisible = true;
+  bool _drawnCursorVisible = false;
   uint16_t _status[TERM_COLS] = {};
   bool _statusPending = false;
   const uint8_t* _art = nullptr;
@@ -62,5 +69,6 @@ class TermRenderer {
   bool artCovered() const;
 
   void renderRow(int row);
-  void blitGlyph(int px, int py, const uint8_t* glyph, uint8_t bgBright, bool invertGlyph);
+  void drawCell(int row, int col, bool cursor);
+  void blitGlyph(int px, int py, const uint8_t* glyph, uint8_t bgBright, bool invertGlyph, uint8_t attrs = 0);
 };

@@ -34,6 +34,18 @@ inline size_t keyBytes(const freeink::KeyEvent& e, uint8_t* out, bool appCursor 
   return 0;
 }
 
+// The Confirm button: Enter, on release, as Confirm + Back redraws and that press must reach no host.
+struct ConfirmButton {
+  bool spent = false;  // this press redrew: its release sends nothing
+
+  bool update(bool released) {
+    if (!released) return false;
+    const bool tap = !spent;
+    spent = false;
+    return tap;
+  }
+};
+
 // The Back button: a tap is Esc, a hold is the info page, so Esc has to wait for the release.
 struct BackButton {
   enum Action { None, Esc, Info };

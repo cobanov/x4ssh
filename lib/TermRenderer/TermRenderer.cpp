@@ -23,8 +23,12 @@ static const uint8_t kBayer4x4[4][4] = {
     {15,  7, 13,  5}
 };
 
+static bool glyphBit(const uint8_t* glyph, int x, int y) {  // MSB-first
+  return (pgm_read_byte(&glyph[y * TermFont::BYTES_PER_ROW + x / 8]) >> (7 - x % 8)) & 1;
+}
+
 void TermRenderer::blitGlyph(int px, int py, const uint8_t* glyph,
-                              uint8_t bgBright, bool invertGlyph) {
+                              uint8_t bgBright, bool invertGlyph, uint8_t attrs) {
   uint8_t* fb = _display.getFrameBuffer();
   constexpr int fbStride = DISPLAY_W / 8;  // 100 bytes per row
 
@@ -36,10 +40,9 @@ void TermRenderer::blitGlyph(int px, int py, const uint8_t* glyph,
       int fbX = px + gx;
       if (fbX >= DISPLAY_W) break;
 
-      // Read glyph bit (MSB-first)
-      int glyphByteIdx = gy * TermFont::BYTES_PER_ROW + (gx / 8);
-      int glyphBitIdx = 7 - (gx % 8);
-      bool isGlyphPixel = (pgm_read_byte(&glyph[glyphByteIdx]) >> glyphBitIdx) & 1;
+      bool isGlyphPixel = glyphBit(glyph, gx, gy);
+      if ((attrs & TermCell::ATTR_BOLD) && gx > 0 && glyphBit(glyph, gx - 1, gy)) isGlyphPixel = true;  // struck twice, a pixel apart
+      if ((attrs & TermCell::ATTR_UNDERLINE) && gy == TERM_FONT_H - 1) isGlyphPixel = true;  // the row '_' sits on, under the descenders
 
       bool drawBlack;
       if (isGlyphPixel) {
@@ -65,23 +68,20 @@ void TermRenderer::blitGlyph(int px, int py, const uint8_t* glyph,
   }
 }
 
+// The cursor is the cell with its effective background flipped.
+void TermRenderer::drawCell(int row, int col, bool cursor) {
+  const TermCell& cell = _buf.cellAt(row, col);
+  uint8_t scratch[TermFont::BYTES_PER_GLYPH];
+  const uint8_t* glyph = glyphFor(cell.codepoint, scratch);
+  const bool inverse = (cell.attrs & TermCell::ATTR_INVERSE) != 0;
+  const uint8_t bgBright = inverse != cursor ? 255 - cell.bgBright : cell.bgBright;
+
+  // Invert glyph when background is dark (for readability)
+  blitGlyph(TERM_OFFSET_X + col * TERM_FONT_W, TERM_OFFSET_Y + row * TERM_FONT_H, glyph, bgBright, bgBright < 128, cell.attrs);
+}
+
 void TermRenderer::renderRow(int row) {
-  for (int col = 0; col < TERM_COLS; col++) {
-    const TermCell& cell = _buf.cellAt(row, col);
-    uint8_t scratch[TermFont::BYTES_PER_GLYPH];
-    const uint8_t* glyph = glyphFor(cell.codepoint, scratch);
-
-    // Determine effective background brightness
-    uint8_t bgBright = cell.bgBright;
-    bool isInverse = (cell.attrs & TermCell::ATTR_INVERSE) != 0;
-    if (isInverse) bgBright = 255 - bgBright;
-
-    // Invert glyph when background is dark (for readability)
-    bool invertGlyph = bgBright < 128;
-
-    blitGlyph(TERM_OFFSET_X + col * TERM_FONT_W, TERM_OFFSET_Y + row * TERM_FONT_H,
-              glyph, bgBright, invertGlyph);
-  }
+  for (int col = 0; col < TERM_COLS; col++) drawCell(row, col, false);
 }
 
 void TermRenderer::renderDirty() {
@@ -124,6 +124,7 @@ void TermRenderer::renderDirty() {
 
   _lastCursorRow = _buf.cursorRow();
   _lastCursorCol = _buf.cursorCol();
+  _drawnCursorVisible = _cursorVisible;
   _buf.clearDirty();
 }
 
@@ -140,6 +141,7 @@ void TermRenderer::renderFull() {
   _fastRefreshCount = 0;
   _lastCursorRow = _buf.cursorRow();
   _lastCursorCol = _buf.cursorCol();
+  _drawnCursorVisible = _cursorVisible;
   _buf.clearDirty();
 }
 
@@ -214,26 +216,5 @@ void TermRenderer::renderArt() {
 }
 
 void TermRenderer::renderCursor() {
-  if (!_cursorVisible) return;
-
-  // Draw cursor as inverted block at current position
-  int row = _buf.cursorRow();
-  int col = _buf.cursorCol();
-
-  if (col >= TERM_COLS) col = TERM_COLS - 1;
-
-  const TermCell& cell = _buf.cellAt(row, col);
-  uint8_t scratch[TermFont::BYTES_PER_GLYPH];
-  const uint8_t* glyph = glyphFor(cell.codepoint, scratch);
-
-  // Cursor: invert the cell's effective background
-  uint8_t bgBright = cell.bgBright;
-  bool isInverse = (cell.attrs & TermCell::ATTR_INVERSE) != 0;
-  if (isInverse) bgBright = 255 - bgBright;
-  // Flip for cursor
-  bgBright = 255 - bgBright;
-  bool invertGlyph = bgBright < 128;
-
-  blitGlyph(TERM_OFFSET_X + col * TERM_FONT_W, TERM_OFFSET_Y + row * TERM_FONT_H,
-            glyph, bgBright, invertGlyph);
+  if (_cursorVisible) drawCell(_buf.cursorRow(), _buf.cursorCol(), true);
 }

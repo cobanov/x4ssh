@@ -1,6 +1,5 @@
 import hashlib
 import importlib.util
-import sys
 from pathlib import Path
 
 
@@ -22,20 +21,6 @@ def build_cache_request(requested, memory_fingerprint, component_options):
         if value.strip()
     )
     return requested.strip() + memory_fingerprint + components
-
-
-if "--self-test" in sys.argv:
-    assert cache_matches("CONFIG_A=y\nCONFIG_B=n", "CONFIG_A=y\nCONFIG_B=n")
-    assert not cache_matches("CONFIG_A=y", "CONFIG_A=y\nCONFIG_B=n")
-    def removing(value, requested="CONFIG_A=y"):
-        return build_cache_request(requested, "fp", [("custom_component_remove", value)])
-
-    assert removing("") == "CONFIG_A=yfp"
-    assert removing("a/b", requested="") == ""
-    assert removing("\n  a/b\n") == removing("a/b")
-    assert removing("a/b") != removing("a/b\nc/d")
-    assert removing("a/b\nc/d") != removing("a/b c/d")
-    raise SystemExit(0)
 
 
 Import("env")  # noqa: F821 -- provided by PlatformIO

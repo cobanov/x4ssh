@@ -14,14 +14,15 @@ void TermBuffer::clampCursor() {
   if (_curCol >= TERM_COLS) _curCol = TERM_COLS - 1;
 }
 
+// Erasing paints the current background: xterm-256color promises this (bce), and programs lean on it.
 void TermBuffer::clearRow(int row) {
   for (int c = 0; c < TERM_COLS; c++)
-    _cells[row][c].clear();
+    _cells[row][c].clear(_bgBright);
   markRowDirty(row);
 }
 
 void TermBuffer::clearCell(int row, int col) {
-  _cells[row][col].clear();
+  _cells[row][col].clear(_bgBright);
 }
 
 void TermBuffer::putChar(uint16_t cp) {

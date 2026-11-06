@@ -1,5 +1,6 @@
-# Stamps the git version and build time into the ELF's esp_app_desc_t. Those come from the tuned core, which is
-# cached, so without this every build would carry the version the core happened to be compiled at.
+# Stamps the git version, the name and the build time into the ELF's esp_app_desc_t. Those come from the tuned core,
+# which is cached, so without this every build would carry what the core happened to be compiled with. The name would
+# be the checkout's folder, and the patched CrossPoint knows x4ssh by it.
 import struct
 import subprocess
 import time
@@ -17,6 +18,8 @@ def stamp(source, target, env):
         assert at >= 0, "no esp_app_desc_t in the ELF"
         f.seek(at + 16)
         f.write(version.encode()[:31].ljust(32, b"\0"))
+        f.seek(at + 48)
+        f.write(b"x4ssh".ljust(32, b"\0"))
         f.seek(at + 80)
         f.write(time.strftime("%H:%M:%S").encode().ljust(16, b"\0") + time.strftime("%b %e %Y").encode().ljust(16, b"\0"))
 

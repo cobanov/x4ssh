@@ -42,7 +42,6 @@ class TermBuffer {
 
   // Alternate screen buffer
   void switchScreen(bool alt);
-  bool isAltScreen() const { return _altActive; }
 
   // Erase characters (ECH)
   void eraseChars(int n);
@@ -51,13 +50,13 @@ class TermBuffer {
   void setAttr(uint8_t attr);
   void clearAttr(uint8_t attr);
   void resetAttrs();
-  uint8_t currentAttrs() const { return _attrs; }
   void setBgBright(uint8_t b) { _bgBright = b; }
 
   // Access
   const TermCell& cellAt(int row, int col) const;
   int cursorRow() const { return _curRow; }
   int cursorCol() const { return _curCol; }
+  bool wrapPending() const { return _wrapPending; }
 
   // Dirty tracking
   uint32_t dirtyRows() const { return _dirtyRows; }

@@ -10,10 +10,10 @@ struct TermCell {
   static constexpr uint8_t ATTR_INVERSE = 0x02;
   static constexpr uint8_t ATTR_UNDERLINE = 0x04;
 
-  void clear() {
+  void clear(uint8_t bg) {
     codepoint = ' ';
     attrs = 0;
-    bgBright = 255;
+    bgBright = bg;
   }
 
   bool operator==(const TermCell& o) const {

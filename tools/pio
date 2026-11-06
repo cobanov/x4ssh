@@ -2,8 +2,10 @@
 # PlatformIO Core 6.1.19, pinned. The tuned core (custom_sdkconfig) is built by pioarduino 55.03.311
 # with SCons 4.8; Core 6.2's SCons 4.11 fails it ("No module named SCons.Tool.FortranCommon").
 # The builder starts a nested `pio`, so this one has to come first on PATH. A core rebuild starts its
-# child from the platform's penv instead, so that one is pinned too.
-P=$(uvx -q --from 'platformio==6.1.19' python -c 'import sys; print(sys.prefix)') || exit 1
-E="$HOME/.platformio/penv/bin/python"
-[ -x "$E" ] && uv pip install -q --python "$E" 'pioarduino==6.1.19'
+# child from the platform's penv instead, so that one is pinned too, and made here when it doesn't exist
+# yet: the platform would make it with the latest Core. pioarduino refuses Python past 3.14.
+P=$(uvx -q --python 3.14 --from 'platformio==6.1.19' python -c 'import sys; print(sys.prefix)') || exit 1
+E="${PLATFORMIO_CORE_DIR:-$HOME/.platformio}/penv/bin/python"
+[ -x "$E" ] || uv venv -q --python 3.14 "${E%/bin/python}"
+uv pip install -q --python "$E" 'pioarduino==6.1.19'
 PATH="$P/bin:$PATH" exec pio "$@"

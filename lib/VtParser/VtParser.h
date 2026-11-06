@@ -49,6 +49,7 @@ class VtParser {
   void handleCsiParam(uint8_t byte);
   void dispatchCsi(uint8_t cmd);
   void handleSgr();
+  void print(uint32_t cp);
 
   int param(int idx, int def = 0) const;
   void resetParams();
@@ -56,6 +57,7 @@ class VtParser {
   bool _cursorVisible = true;
   bool _appCursor = false;
   bool _lineDrawing = false;  // G0 is DEC Special Graphics
+  uint32_t _last = 0;         // the last character printed, for REP
   void (*_reply)(const char*) = nullptr;
   void reply(const char* s) { if (_reply) _reply(s); }
 

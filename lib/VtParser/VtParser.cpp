@@ -7,6 +7,39 @@ static const uint16_t kLineDrawing[] = {
     0x23BB, 0x2500, 0x23BC, 0x23BD, 0x251C, 0x2524, 0x2534, 0x252C, 0x2502, 0x2264, 0x2265, 0x03C0, 0x2260, 0x00A3, 0x00B7,
 };
 
+// Width as the host's wcwidth counts it, or everything after the character sits in the wrong column.
+// shortcut: the emoji blocks are taken whole and the combining marks are the common ones; widen these if a prompt drifts.
+static const struct Range {
+  uint32_t lo, hi;
+} kZeroWidth[] = {
+    {0x0300, 0x036F}, {0x200B, 0x200F}, {0x2060, 0x2064}, {0x20D0, 0x20F0}, {0xFE00, 0xFE0F}, {0xFE20, 0xFE2F}, {0xFEFF, 0xFEFF}, {0xE0100, 0xE01EF},
+}, kWide[] = {
+    {0x1100, 0x115F}, {0x231A, 0x231B}, {0x2329, 0x232A}, {0x23E9, 0x23EC}, {0x23F0, 0x23F0}, {0x23F3, 0x23F3}, {0x25FD, 0x25FE}, {0x2614, 0x2615},
+    {0x2648, 0x2653}, {0x267F, 0x267F}, {0x2693, 0x2693}, {0x26A1, 0x26A1}, {0x26AA, 0x26AB}, {0x26BD, 0x26BE}, {0x26C4, 0x26C5}, {0x26CE, 0x26CE},
+    {0x26D4, 0x26D4}, {0x26EA, 0x26EA}, {0x26F2, 0x26F3}, {0x26F5, 0x26F5}, {0x26FA, 0x26FA}, {0x26FD, 0x26FD}, {0x2705, 0x2705}, {0x270A, 0x270B},
+    {0x2728, 0x2728}, {0x274C, 0x274C}, {0x274E, 0x274E}, {0x2753, 0x2755}, {0x2757, 0x2757}, {0x2795, 0x2797}, {0x27B0, 0x27B0}, {0x27BF, 0x27BF},
+    {0x2B1B, 0x2B1C}, {0x2B50, 0x2B50}, {0x2B55, 0x2B55}, {0x2E80, 0x303E}, {0x3041, 0x4DBF}, {0x4E00, 0xA4CF}, {0xA960, 0xA97F}, {0xAC00, 0xD7A3},
+    {0xF900, 0xFAFF}, {0xFE10, 0xFE19}, {0xFE30, 0xFE6F}, {0xFF01, 0xFF60}, {0xFFE0, 0xFFE6}, {0x1F004, 0x1F004}, {0x1F0CF, 0x1F0CF}, {0x1F18E, 0x1F18E},
+    {0x1F191, 0x1F19A}, {0x1F200, 0x1F265}, {0x1F300, 0x1F64F}, {0x1F680, 0x1F6FF}, {0x1F900, 0x1F9FF}, {0x1FA70, 0x1FAFF}, {0x20000, 0x3FFFD},
+};
+
+template <size_t N>
+static bool inRanges(const Range (&ranges)[N], uint32_t cp) {
+  for (const Range& r : ranges) {
+    if (cp >= r.lo && cp <= r.hi) return true;
+  }
+  return false;
+}
+
+void VtParser::print(uint32_t cp) {
+  if (cp >= 0x300 && inRanges(kZeroWidth, cp)) return;
+  const bool wide = cp >= 0x1100 && inRanges(kWide, cp);
+  _last = cp;
+  if (wide && _buf.cursorCol() == TERM_COLS - 1 && !_buf.wrapPending()) _buf.putChar(' ');  // both halves on one line, as on xterm
+  _buf.putChar(cp > 0xFFFF ? '?' : (uint16_t)cp);  // a cell holds 16 bits
+  if (wide) _buf.putChar(' ');
+}
+
 void VtParser::resetParams() {
   for (int i = 0; i < MAX_PARAMS; i++) _params[i] = 0;
   _paramCount = 0;
@@ -21,6 +54,11 @@ int VtParser::param(int idx, int def) const {
 }
 
 void VtParser::feed(uint8_t byte) {
+  // ESC starts over from anywhere, so a sequence cut in half does not eat the next one
+  if (byte == 0x1B && _state != State::Ground) {
+    _state = State::Escape;
+    return;
+  }
   switch (_state) {
     case State::Ground:    handleGround(byte);  break;
     case State::Escape:    handleEscape(byte);   break;
@@ -29,7 +67,6 @@ void VtParser::feed(uint8_t byte) {
     case State::OscString:
       // Consume until BEL or ST (ESC \): Escape then eats the backslash
       if (byte == 0x07) _state = State::Ground;
-      else if (byte == 0x1B) _state = State::Escape;
       break;
     case State::Charset:
       _lineDrawing = byte == '0';
@@ -48,9 +85,7 @@ void VtParser::handleGround(uint8_t byte) {
     if ((byte & 0xC0) == 0x80) {
       _utf8Cp = (_utf8Cp << 6) | (byte & 0x3F);
       _utf8Remaining--;
-      if (_utf8Remaining == 0) {
-        _buf.putChar(_utf8Cp > 0xFFFF ? '?' : (uint16_t)_utf8Cp);  // a cell holds 16 bits
-      }
+      if (_utf8Remaining == 0) print(_utf8Cp);
       return;
     }
     // Invalid continuation - reset and fall through
@@ -74,7 +109,7 @@ void VtParser::handleGround(uint8_t byte) {
     case 0x0D: _buf.carriageReturn(); break;  // CR
     default:
       if (byte >= 0x20 && byte < 0x7F) {
-        _buf.putChar(_lineDrawing && byte >= 0x60 ? kLineDrawing[byte - 0x60] : byte);
+        print(_lineDrawing && byte >= 0x60 ? kLineDrawing[byte - 0x60] : byte);
       } else if (byte >= 0xC0 && byte < 0xE0) {
         // UTF-8 2-byte sequence start
         _utf8Cp = byte & 0x1F;
@@ -122,11 +157,15 @@ void VtParser::handleEscape(uint8_t byte) {
       _state = State::Ground;
       break;
     case 'c':  // RIS - full reset
+      _buf.resetAttrs();  // first: erasing paints the current background
+      _buf.switchScreen(false);
+      _buf.setScrollRegion(0, TERM_ROWS - 1);
       _buf.eraseDisplay(2);
       _buf.setCursor(0, 0);
-      _buf.resetAttrs();
-      _buf.setScrollRegion(0, TERM_ROWS - 1);
+      _cursorVisible = true;
+      _appCursor = false;
       _lineDrawing = false;
+      _last = 0;
       _state = State::Ground;
       break;
     case '=':  // DECKPAM - keypad application mode (ignore)
@@ -204,30 +243,18 @@ void VtParser::dispatchCsi(uint8_t cmd) {
   int n = param(0, 1);
 
   if (_questionMark) {
-    int mode = param(0, 0);
-    switch (cmd) {
-      case 'h':  // DECSET
-        switch (mode) {
-          case 1: _appCursor = true; break;         // DECCKM
-          case 25: _cursorVisible = true; break;    // DECTCEM show cursor
-          case 47:    // alt screen (simple)
-          case 1047:  // alt screen
-          case 1049:  // switchScreen keeps the cursor itself: DECSC's slot belongs to the program
-            _buf.switchScreen(true);
-            break;
-        }
-        break;
-      case 'l':  // DECRST
-        switch (mode) {
-          case 1: _appCursor = false; break;        // DECCKM
-          case 25: _cursorVisible = false; break;   // DECTCEM hide cursor
-          case 47:
-          case 1047:
-          case 1049:
-            _buf.switchScreen(false);
-            break;
-        }
-        break;
+    if (cmd != 'h' && cmd != 'l') return;
+    const bool set = cmd == 'h';  // DECSET, or DECRST
+    for (int i = 0; i < _paramCount; i++) {
+      switch (_params[i]) {
+        case 1: _appCursor = set; break;       // DECCKM
+        case 25: _cursorVisible = set; break;  // DECTCEM
+        case 47:    // alt screen (simple)
+        case 1047:  // alt screen
+        case 1049:  // switchScreen keeps the cursor itself: DECSC's slot belongs to the program
+          _buf.switchScreen(set);
+          break;
+      }
     }
     return;
   }
@@ -281,6 +308,15 @@ void VtParser::dispatchCsi(uint8_t cmd) {
     case 's': _buf.saveCursor(); break;     // ANSI save cursor
     case 'u': _buf.restoreCursor(); break;  // ANSI restore cursor
     case 'X': _buf.eraseChars(n); break;    // ECH - erase characters
+    case 'Z': {                             // CBT - back n tab stops
+      int col = _buf.cursorCol();
+      for (int i = 0; i < n && col > 0; i++) col = (col - 1) / TAB_WIDTH * TAB_WIDTH;
+      _buf.setCursor(_buf.cursorRow(), col);
+      break;
+    }
+    case 'b':  // REP - ncurses draws rules with it; past a full screen more changes nothing
+      for (int i = 0; _last && i < n && i < TERM_ROWS * TERM_COLS; i++) print(_last);
+      break;
     case 'c':  // DA - device attributes
       reply("\033[?1;0c");  // VT100 with no options
       break;
@@ -307,6 +343,11 @@ static const uint8_t kAnsiLum[16] = {
   255,  // 15: bright white
 };
 
+// Compute luminance from RGB
+static uint8_t lumRGB(int r, int g, int b) {
+  return (uint8_t)((r * 77 + g * 150 + b * 29) >> 8);
+}
+
 // Compute luminance from 256-color palette index
 static uint8_t lum256(int n) {
   if (n < 16) return kAnsiLum[n];
@@ -314,21 +355,10 @@ static uint8_t lum256(int n) {
     // Grayscale ramp: 232=dark(8), 255=light(238)
     return 8 + (n - 232) * 10;
   }
-  // 6x6x6 color cube (indices 16-231)
-  int idx = n - 16;
-  int b5 = idx % 6;
-  int g5 = (idx / 6) % 6;
-  int r5 = idx / 36;
-  // Map 0-5 to 0,95,135,175,215,255
-  int r = r5 ? r5 * 40 + 55 : 0;
-  int g = g5 ? g5 * 40 + 55 : 0;
-  int b = b5 ? b5 * 40 + 55 : 0;
-  return (uint8_t)((r * 77 + g * 150 + b * 29) >> 8);
-}
-
-// Compute luminance from RGB
-static uint8_t lumRGB(int r, int g, int b) {
-  return (uint8_t)((r * 77 + g * 150 + b * 29) >> 8);
+  // 6x6x6 color cube (indices 16-231), each axis 0,95,135,175,215,255
+  auto level = [](int v) { return v ? v * 40 + 55 : 0; };
+  const int idx = n - 16;
+  return lumRGB(level(idx / 36), level(idx / 6 % 6), level(idx % 6));
 }
 
 void VtParser::handleSgr() {
@@ -337,8 +367,14 @@ void VtParser::handleSgr() {
     return;
   }
 
+  // Foreground colors have nothing to show on a one-ink panel, so 30-37, 39 and 90-97 do nothing.
   for (int i = 0; i < _paramCount; i++) {
-    int p = _params[i];
+    const int p = _params[i];
+    if (p >= 40 && p <= 47) {
+      _buf.setBgBright(kAnsiLum[p - 40]);
+    } else if (p >= 100 && p <= 107) {
+      _buf.setBgBright(kAnsiLum[p - 100 + 8]);
+    }
     switch (p) {
       case 0:  _buf.resetAttrs(); break;
       case 1:  _buf.setAttr(TermCell::ATTR_BOLD); break;
@@ -348,77 +384,21 @@ void VtParser::handleSgr() {
       case 22: _buf.clearAttr(TermCell::ATTR_BOLD); break;
       case 24: _buf.clearAttr(TermCell::ATTR_UNDERLINE); break;
       case 27: _buf.clearAttr(TermCell::ATTR_INVERSE); break;
+      case 49: _buf.setBgBright(255); break;  // default bg (white)
 
-      // Basic foreground colors (dark) - no attribute change
-      case 30: case 31: case 32: case 33:
-      case 34: case 35: case 36: case 37:
-        break;
-      case 39: break;  // Default foreground
-
-      // Basic background colors - map to brightness
-      case 40: _buf.setBgBright(kAnsiLum[0]); break;   // black bg
-      case 41: _buf.setBgBright(kAnsiLum[1]); break;   // red bg
-      case 42: _buf.setBgBright(kAnsiLum[2]); break;   // green bg
-      case 43: _buf.setBgBright(kAnsiLum[3]); break;   // yellow bg
-      case 44: _buf.setBgBright(kAnsiLum[4]); break;   // blue bg
-      case 45: _buf.setBgBright(kAnsiLum[5]); break;   // magenta bg
-      case 46: _buf.setBgBright(kAnsiLum[6]); break;   // cyan bg
-      case 47: _buf.setBgBright(kAnsiLum[7]); break;   // white bg
-      case 49: _buf.setBgBright(255); break;            // default bg (white)
-
-      // Bright foreground - map to bold
-      case 90: case 91: case 92: case 93:
-      case 94: case 95: case 96: case 97:
-        _buf.setAttr(TermCell::ATTR_BOLD);
-        break;
-
-      // Bright background - map to brightness
-      case 100: _buf.setBgBright(kAnsiLum[8]); break;
-      case 101: _buf.setBgBright(kAnsiLum[9]); break;
-      case 102: _buf.setBgBright(kAnsiLum[10]); break;
-      case 103: _buf.setBgBright(kAnsiLum[11]); break;
-      case 104: _buf.setBgBright(kAnsiLum[12]); break;
-      case 105: _buf.setBgBright(kAnsiLum[13]); break;
-      case 106: _buf.setBgBright(kAnsiLum[14]); break;
-      case 107: _buf.setBgBright(kAnsiLum[15]); break;
-
-      // Extended foreground color: 38;5;N or 38;2;R;G;B
+      // Extended color, 5;N or 2;R;G;B: the arguments are skipped either way
       case 38:
-        if (i + 1 < _paramCount && _params[i + 1] == 5) {
-          // 256-color: 38;5;N
-          if (i + 2 < _paramCount) {
-            int n = _params[i + 2];
-            if (n >= 8 && n < 16) _buf.setAttr(TermCell::ATTR_BOLD);
-          }
+      case 48: {
+        const int kind = i + 1 < _paramCount ? _params[i + 1] : 0;
+        if (kind == 5) {
+          if (p == 48 && i + 2 < _paramCount) _buf.setBgBright(lum256(_params[i + 2]));
           i += 2;
-        } else if (i + 1 < _paramCount && _params[i + 1] == 2) {
-          // RGB: 38;2;R;G;B
-          if (i + 4 < _paramCount) {
-            uint8_t lum = lumRGB(_params[i + 2], _params[i + 3], _params[i + 4]);
-            if (lum > 150) _buf.setAttr(TermCell::ATTR_BOLD);
-          }
+        } else if (kind == 2) {
+          if (p == 48 && i + 4 < _paramCount) _buf.setBgBright(lumRGB(_params[i + 2], _params[i + 3], _params[i + 4]));
           i += 4;
         }
         break;
-
-      // Extended background color: 48;5;N or 48;2;R;G;B
-      case 48:
-        if (i + 1 < _paramCount && _params[i + 1] == 5) {
-          // 256-color: 48;5;N
-          if (i + 2 < _paramCount) {
-            _buf.setBgBright(lum256(_params[i + 2]));
-          }
-          i += 2;
-        } else if (i + 1 < _paramCount && _params[i + 1] == 2) {
-          // RGB: 48;2;R;G;B
-          if (i + 4 < _paramCount) {
-            _buf.setBgBright(lumRGB(_params[i + 2], _params[i + 3], _params[i + 4]));
-          }
-          i += 4;
-        }
-        break;
-
-      default: break;
+      }
     }
   }
 }

@@ -29,6 +29,7 @@ SET_LOOP_TASK_STACK_SIZE(20480);
 static const char* kKeyPath = "/littlefs/id_ed25519";
 static const char* kKnownHosts = "/littlefs/known_hosts";
 static const char* kDefaultTz = "UTC0";
+static constexpr unsigned long kIdleSleepMs = 10 * 60 * 1000;  // at a prompt, on battery: a bump in a bag must not drain it
 
 static EInkDisplay display(EPD_SCLK, EPD_MOSI, EPD_CS, EPD_DC, EPD_RST, EPD_BUSY);
 static HalGPIO gpio;
@@ -113,9 +114,9 @@ static void updateArt() {
 static void pumpDisplay(bool now = false) {
   updateStatus();
   updateArt();
-  if (termBuf.dirtyRows() == 0 && !renderer.statusPending()) return;
-  if (!now && millis() - lastRefreshMs < MIN_REFRESH_INTERVAL_MS) return;
   renderer.setCursorVisible(parser.cursorVisible());
+  if (termBuf.dirtyRows() == 0 && !renderer.statusPending() && !renderer.cursorMoved()) return;
+  if (!now && millis() - lastRefreshMs < MIN_REFRESH_INTERVAL_MS) return;
   renderer.renderDirty();
   lastRefreshMs = millis();
 }
@@ -145,7 +146,7 @@ static void sleepNow() {
   uint16_t cells[TERM_COLS];
   textStatus(cells, TERM_COLS, since, bat);
   renderer.setStatus(cells);
-  text("\033[?25l");
+  text("\033[0m\033[?25l");  // a session's background would paint the whole sleep screen
   splash("press power to wake");
   renderer.setArt(kMascotAsleep);
   renderer.setCursorVisible(false);
@@ -208,17 +209,28 @@ static size_t pollInput(uint8_t* out, size_t cap) {
     K key;
   } kButtons[] = {
       {HalGPIO::BTN_UP, K::Up},     {HalGPIO::BTN_DOWN, K::Down},       {HalGPIO::BTN_RIGHT, K::Right},
-      {HalGPIO::BTN_LEFT, K::Left}, {HalGPIO::BTN_CONFIRM, K::Enter},
+      {HalGPIO::BTN_LEFT, K::Left},
   };
   static BackButton back;
+  static ConfirmButton confirm;
   size_t n = 0;
   bool button = false;
   freeink::KeyEvent e;
   gpio.update();
+  if (!renderer.paged() && ((gpio.wasPressed(HalGPIO::BTN_CONFIRM) && gpio.isPressed(HalGPIO::BTN_BACK)) ||
+                            (gpio.wasPressed(HalGPIO::BTN_BACK) && gpio.isPressed(HalGPIO::BTN_CONFIRM)))) {
+    back.spent = confirm.spent = true;
+    renderer.renderFull();
+  }
   for (auto& b : kButtons) {
     if (!gpio.wasPressed(b.btn) || n + 5 > cap) continue;
     button = true;
     e.special = b.key;
+    n += keyBytes(e, out + n, parser.appCursor());
+  }
+  if (confirm.update(gpio.wasReleased(HalGPIO::BTN_CONFIRM)) && n + 5 <= cap) {
+    button = true;
+    e.special = K::Enter;
     n += keyBytes(e, out + n, parser.appCursor());
   }
   const auto backAction = back.update(gpio.isPressed(HalGPIO::BTN_BACK), gpio.wasReleased(HalGPIO::BTN_BACK), gpio.getHeldTime());
@@ -232,11 +244,6 @@ static size_t pollInput(uint8_t* out, size_t cap) {
     // The keyboard slept past the reconnect window: a press on the X4 starts looking again.
     if (button && !kb.isConnected() && !kb.isConnecting()) kb.armBondedReconnect(freeink::PickPolicy::First, nullptr);
     while (n + 5 <= cap && kb.popKey(e)) n += keyBytes(e, out + n, parser.appCursor());
-  }
-  if (!renderer.paged() && ((gpio.wasPressed(HalGPIO::BTN_CONFIRM) && gpio.isPressed(HalGPIO::BTN_BACK)) ||
-                            (gpio.wasPressed(HalGPIO::BTN_BACK) && gpio.isPressed(HalGPIO::BTN_CONFIRM)))) {
-    back.spent = true;
-    renderer.renderFull();
   }
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > 1500) sleepNow();
   while (n < cap && Serial.available()) out[n++] = Serial.read();
@@ -259,6 +266,7 @@ static String ask(const char* prompt, bool secret = false) {
   askCancelled = false;
   int esc = 0;  // 1: after ESC, 2: inside a CSI/SS3 sequence
   String line;
+  unsigned long lastKey = millis();
   say("%s", prompt);
   for (;;) {
     uint8_t in[64];
@@ -267,8 +275,9 @@ static String ask(const char* prompt, bool secret = false) {
       uint8_t c = in[i];
       bool skipLF = afterCR && c == '\n';
       afterCR = c == '\r';
+      if (esc == 1 && c != '[' && c != 'O') esc = 0;  // a bare Esc, from the Back button: this byte is a key of its own
       if (esc == 1) {
-        esc = (c == '[' || c == 'O') ? 2 : 0;
+        esc = 2;
       } else if (esc == 2) {
         if (c >= 0x40 && c <= 0x7e) esc = 0;
       } else if (c == 0x1b) {
@@ -292,6 +301,8 @@ static String ask(const char* prompt, bool secret = false) {
       }
     }
     pumpDisplay();
+    if (n) lastKey = millis();
+    else if (millis() - lastKey > kIdleSleepMs && !gpio.isUsbConnected()) sleepNow();
     if (!n) delay(5);
   }
 }
@@ -346,6 +357,9 @@ static void cmdPair() {
     kb.poll();
     delay(50);
   }
+  struct Release {
+    ~Release() { kb.releaseScanResults(); }
+  } release;  // however this ends
   int first = -1;
   for (int i = 0; i < kb.deviceCount(); i++) {
     const auto& d = kb.device(i);
@@ -378,7 +392,6 @@ static void cmdPair() {
     }
     pumpDisplay();
   }
-  kb.releaseScanResults();
   say("keyboard connected: %s\n", printable(kb.connectedName()));
 }
 
@@ -386,6 +399,11 @@ static void cmdPair() {
 
 static void loadKey() {
   if (ssh_pki_import_privkey_file(kKeyPath, nullptr, nullptr, nullptr, &userKey) == SSH_OK) return;
+  // A new key would orphan every authorized_keys entry for good, and this may just be a libssh that can't read the file.
+  if (LittleFS.exists("/id_ed25519")) {
+    say("device key unreadable, keeping it: password login only\n");
+    return;
+  }
   say("first boot: generating device key...\n");
   pumpDisplay(true);
   if (ssh_pki_generate(SSH_KEYTYPE_ED25519, 0, &userKey) != SSH_OK ||
@@ -583,6 +601,7 @@ static void cmdCrosspoint() {
     say("no other firmware to boot\n");
     return;
   }
+  prefs.remove("home");  // left behind, it could send a later install's first wake to a stock CrossPoint with no way back
   say("restarting\n");
   pumpDisplay(true);
   ESP.restart();
